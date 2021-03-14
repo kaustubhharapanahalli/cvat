@@ -1,10 +1,10 @@
-// Copyright (C) 2020 Intel Corporation
+// Copyright (C) 2020-2021 Intel Corporation
 //
 // SPDX-License-Identifier: MIT
 
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
-import { GlobalHotKeys, KeyMap } from 'react-hotkeys';
+import GlobalHotKeys, { KeyMap } from 'utils/mousetrap-react';
 import { Row, Col } from 'antd/lib/grid';
 import Text from 'antd/lib/typography/Text';
 import Select from 'antd/lib/select';
@@ -51,15 +51,16 @@ const ShortcutsSelect = (props: Props): JSX.Element => {
         setShortcutLabelMap(newShortcutLabelMap);
     }, []);
 
-
-    Object.keys(shortcutLabelMap).map((id) => Number.parseInt(id, 10))
-        .filter((id) => shortcutLabelMap[id]).forEach((id: number): void => {
+    Object.keys(shortcutLabelMap)
+        .map((id) => Number.parseInt(id, 10))
+        .filter((id) => shortcutLabelMap[id])
+        .forEach((id: number): void => {
             const [label] = labels.filter((_label) => _label.id === shortcutLabelMap[id]);
             const key = `SETUP_${id}_TAG`;
             keyMap[key] = {
                 name: `Setup ${label.name} tag`,
                 description: `Setup tag with "${label.name}" label`,
-                sequence: `${id}`,
+                sequences: [`${id}`],
                 action: 'keydown',
             };
 
@@ -80,47 +81,38 @@ const ShortcutsSelect = (props: Props): JSX.Element => {
 
     return (
         <div className='cvat-tag-annotation-label-selects'>
-            <GlobalHotKeys keyMap={keyMap as KeyMap} handlers={handlers} allowChanges />
+            <GlobalHotKeys keyMap={keyMap as KeyMap} handlers={handlers} />
             <Row>
                 <Col>
                     <Text strong>Shortcuts for labels:</Text>
                 </Col>
             </Row>
-            {
-                shift(Object.keys(shortcutLabelMap), 1).slice(0, Math.min(labels.length, 10))
-                    .map((id) => (
-                        <Row key={id}>
-                            <Col>
-                                <Text strong>{`Key ${id}:`}</Text>
-                                <Select
-                                    value={`${shortcutLabelMap[Number.parseInt(id, 10)]}`}
-                                    onChange={(value: string) => {
-                                        onChangeShortcutLabel(value, Number.parseInt(id, 10));
-                                    }}
-                                    size='default'
-                                    style={{ width: 200 }}
-                                    className='cvat-tag-annotation-label-select'
-                                >
-                                    <Select.Option value=''>
-                                        <Text type='secondary'>
-                                            None
-                                        </Text>
+            {shift(Object.keys(shortcutLabelMap), 1)
+                .slice(0, Math.min(labels.length, 10))
+                .map((id) => (
+                    <Row key={id}>
+                        <Col>
+                            <Text strong>{`Key ${id}:`}</Text>
+                            <Select
+                                value={`${shortcutLabelMap[Number.parseInt(id, 10)]}`}
+                                onChange={(value: string) => {
+                                    onChangeShortcutLabel(value, Number.parseInt(id, 10));
+                                }}
+                                style={{ width: 200 }}
+                                className='cvat-tag-annotation-label-select'
+                            >
+                                <Select.Option value=''>
+                                    <Text type='secondary'>None</Text>
+                                </Select.Option>
+                                {(labels as any[]).map((label: any) => (
+                                    <Select.Option key={label.id} value={`${label.id}`}>
+                                        {label.name}
                                     </Select.Option>
-                                    {
-                                        (labels as any[]).map((label: any) => (
-                                            <Select.Option
-                                                key={label.id}
-                                                value={`${label.id}`}
-                                            >
-                                                {label.name}
-                                            </Select.Option>
-                                        ))
-                                    }
-                                </Select>
-                            </Col>
-                        </Row>
-                    ))
-            }
+                                ))}
+                            </Select>
+                        </Col>
+                    </Row>
+                ))}
         </div>
     );
 };

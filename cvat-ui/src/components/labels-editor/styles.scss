@@ -33,6 +33,7 @@ textarea.ant-input.cvat-raw-labels-viewer {
     overflow-y: auto;
     min-height: 9em;
     flex-wrap: wrap;
+    align-items: baseline;
 }
 
 .cvat-constructor-viewer-item {
@@ -51,7 +52,7 @@ textarea.ant-input.cvat-raw-labels-viewer {
         margin-left: 5px;
         color: white;
 
-        > i:hover {
+        > span[role='img']:hover {
             filter: invert(1);
         }
     }
@@ -84,7 +85,7 @@ textarea.ant-input.cvat-raw-labels-viewer {
     display: contents;
 }
 
-.cvat-delete-attribute-button:hover > i {
+.cvat-delete-attribute-button:hover > span[role='img'] {
     color: $danger-icon-color;
 }
 

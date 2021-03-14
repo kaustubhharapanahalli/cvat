@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2019 Intel Corporation
+# Copyright (C) 2018-2020 Intel Corporation
 #
 # SPDX-License-Identifier: MIT
 
@@ -50,10 +50,22 @@ def generate_ssh_keys():
     ssh_dir = '{}/.ssh'.format(os.getenv('HOME'))
     pidfile = os.path.join(ssh_dir, 'ssh.pid')
 
+    def add_ssh_keys():
+        IGNORE_FILES = ('README.md', 'ssh.pid')
+        keys_to_add = [entry.name for entry in os.scandir(ssh_dir) if entry.name not in IGNORE_FILES]
+        keys_to_add = ' '.join(os.path.join(ssh_dir, f) for f in keys_to_add)
+        subprocess.run(['ssh-add {}'.format(keys_to_add)],
+            shell = True,
+            stderr = subprocess.PIPE,
+            # lets set the timeout if ssh-add requires a input passphrase for key
+            # otherwise the process will be freezed
+            timeout=30,
+            )
+
     with open(pidfile, "w") as pid:
         fcntl.flock(pid, fcntl.LOCK_EX)
         try:
-            subprocess.run(['ssh-add {}/*'.format(ssh_dir)], shell = True, stderr = subprocess.PIPE)
+            add_ssh_keys()
             keys = subprocess.run(['ssh-add -l'], shell = True,
                 stdout = subprocess.PIPE).stdout.decode('utf-8').split('\n')
             if 'has no identities' in keys[0]:
@@ -96,6 +108,7 @@ INSTALLED_APPS = [
     'cvat.apps.dataset_repo',
     'cvat.apps.restrictions',
     'cvat.apps.lambda_manager',
+    'cvat.apps.opencv',
     'django_rq',
     'compressor',
     'cacheops',
@@ -323,7 +336,10 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 os.makedirs(STATIC_ROOT, exist_ok=True)
 
 DATA_ROOT = os.path.join(BASE_DIR, 'data')
+LOGSTASH_DB = os.path.join(DATA_ROOT,'logstash.db')
 os.makedirs(DATA_ROOT, exist_ok=True)
+if not os.path.exists(LOGSTASH_DB):
+    os.mknod(LOGSTASH_DB)
 
 MEDIA_DATA_ROOT = os.path.join(DATA_ROOT, 'data')
 os.makedirs(MEDIA_DATA_ROOT, exist_ok=True)
@@ -333,6 +349,9 @@ os.makedirs(CACHE_ROOT, exist_ok=True)
 
 TASKS_ROOT = os.path.join(DATA_ROOT, 'tasks')
 os.makedirs(TASKS_ROOT, exist_ok=True)
+
+PROJECTS_ROOT = os.path.join(DATA_ROOT, 'projects')
+os.makedirs(PROJECTS_ROOT, exist_ok=True)
 
 SHARE_ROOT = os.path.join(BASE_DIR, 'share')
 os.makedirs(SHARE_ROOT, exist_ok=True)
@@ -350,6 +369,11 @@ LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
+        'logstash': {
+            '()': 'logstash_async.formatter.DjangoLogstashFormatter',
+            'message_type': 'python-logstash',
+            'fqdn': False, # Fully qualified domain name. Default value: false.
+        },
         'standard': {
             'format': '[%(asctime)s] %(levelname)s %(name)s: %(message)s'
         }
@@ -370,11 +394,16 @@ LOGGING = {
         },
         'logstash': {
             'level': 'INFO',
-            'class': 'logstash.TCPLogstashHandler',
+            'class': 'logstash_async.handler.AsynchronousLogstashHandler',
+            'formatter': 'logstash',
+            'transport': 'logstash_async.transport.HttpTransport',
+            'ssl_enable': False,
+            'ssl_verify': False,
             'host': os.getenv('DJANGO_LOG_SERVER_HOST', 'localhost'),
-            'port': os.getenv('DJANGO_LOG_SERVER_PORT', 5000),
+            'port': os.getenv('DJANGO_LOG_SERVER_PORT', 8080),
             'version': 1,
             'message_type': 'django',
+            'database_path': LOGSTASH_DB,
         }
     },
     'loggers': {
@@ -415,6 +444,9 @@ RESTRICTIONS = {
     # this setting limits the number of tasks for the user
     'task_limit': None,
 
+    # this setting limits the number of projects for the user
+    'project_limit': None,
+
     # this setting reduse task visibility to owner and assignee only
     'reduce_task_visibility': False,
 
@@ -440,3 +472,4 @@ CACHES = {
 }
 
 USE_CACHE = True
+

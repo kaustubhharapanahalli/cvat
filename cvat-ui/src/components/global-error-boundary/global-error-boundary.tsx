@@ -1,4 +1,4 @@
-// Copyright (C) 2020 Intel Corporation
+// Copyright (C) 2020-2021 Intel Corporation
 //
 // SPDX-License-Identifier: MIT
 
@@ -10,7 +10,6 @@ import Text from 'antd/lib/typography/Text';
 import Paragraph from 'antd/lib/typography/Paragraph';
 import Collapse from 'antd/lib/collapse';
 import TextArea from 'antd/lib/input/TextArea';
-import Tooltip from 'antd/lib/tooltip';
 import copy from 'copy-to-clipboard';
 import ErrorStackParser from 'error-stack-parser';
 
@@ -18,7 +17,12 @@ import { ThunkDispatch } from 'utils/redux';
 import { resetAfterErrorAsync } from 'actions/boundaries-actions';
 import { CombinedState } from 'reducers/interfaces';
 import logger, { LogType } from 'cvat-logger';
+import CVATTooltip from 'components/common/cvat-tooltip';
 import consts from 'consts';
+
+interface OwnProps {
+    children: JSX.Element;
+}
 
 interface StateToProps {
     job: any | null;
@@ -40,14 +44,9 @@ interface State {
 function mapStateToProps(state: CombinedState): StateToProps {
     const {
         annotation: {
-            job: {
-                instance: job,
-            },
+            job: { instance: job },
         },
-        about: {
-            server,
-            packageVersion,
-        },
+        about: { server, packageVersion },
     } = state;
 
     return {
@@ -67,8 +66,7 @@ function mapDispatchToProps(dispatch: ThunkDispatch): DispatchToProps {
     };
 }
 
-
-type Props = StateToProps & DispatchToProps;
+type Props = StateToProps & DispatchToProps & OwnProps;
 class GlobalErrorBoundary extends React.PureComponent<Props, State> {
     public constructor(props: Props) {
         super(props);
@@ -107,12 +105,7 @@ class GlobalErrorBoundary extends React.PureComponent<Props, State> {
 
     public render(): React.ReactNode {
         const {
-            restore,
-            job,
-            serverVersion,
-            coreVersion,
-            canvasVersion,
-            uiVersion,
+            restore, job, serverVersion, coreVersion, canvasVersion, uiVersion,
         } = this.props;
 
         const { hasError, error } = this.state;
@@ -142,7 +135,11 @@ class GlobalErrorBoundary extends React.PureComponent<Props, State> {
                                 <Collapse accordion>
                                     <Collapse.Panel header='Error message' key='errorMessage'>
                                         <Text type='danger'>
-                                            <TextArea className='cvat-global-boundary-error-field' autoSize value={message} />
+                                            <TextArea
+                                                className='cvat-global-boundary-error-field'
+                                                autoSize
+                                                value={message}
+                                            />
                                         </Text>
                                     </Collapse.Panel>
                                 </Collapse>
@@ -153,10 +150,18 @@ class GlobalErrorBoundary extends React.PureComponent<Props, State> {
                             </Paragraph>
                             <ul>
                                 <li>
-                                    <Tooltip title='Copied!' trigger='click' mouseLeaveDelay={0}>
+                                    <CVATTooltip title='Copied!' trigger='click'>
                                         {/* eslint-disable-next-line */}
-                                        <a onClick={() => {copy(message)}}> Copy </a>
-                                    </Tooltip>
+                                        <a
+                                            onClick={() => {
+                                                copy(message);
+                                            }}
+                                        >
+                                            {' '}
+                                            Copy
+                                            {' '}
+                                        </a>
+                                    </CVATTooltip>
                                     the error message to clipboard
                                 </li>
                                 <li>
@@ -192,8 +197,7 @@ class GlobalErrorBoundary extends React.PureComponent<Props, State> {
                                         Press
                                         {/* eslint-disable-next-line */}
                                         <a onClick={restoreGlobalState}> here </a>
-                                        if you wish CVAT tried to restore your
-                                        annotation progress or
+                                        if you wish CVAT tried to restore your annotation progress or
                                         {/* eslint-disable-next-line */}
                                         <a onClick={() => window.location.reload()}> update </a>
                                         the page
@@ -217,7 +221,4 @@ class GlobalErrorBoundary extends React.PureComponent<Props, State> {
     }
 }
 
-export default connect(
-    mapStateToProps,
-    mapDispatchToProps,
-)(GlobalErrorBoundary);
+export default connect(mapStateToProps, mapDispatchToProps)(GlobalErrorBoundary);

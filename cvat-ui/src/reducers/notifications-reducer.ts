@@ -102,6 +102,9 @@ const defaultState: NotificationsState = {
             resolvingIssue: null,
             submittingReview: null,
         },
+        predictor: {
+            prediction: null,
+        },
     },
     messages: {
         tasks: {
@@ -665,6 +668,7 @@ export default function (state = defaultState, action: AnyAction): Notifications
                         jobFetching: {
                             message: 'Error during fetching a job',
                             reason: action.payload.error.toString(),
+                            className: 'cvat-notification-notice-fetch-job-failed',
                         },
                     },
                 },
@@ -842,6 +846,7 @@ export default function (state = defaultState, action: AnyAction): Notifications
                                 'Could not upload annotations for the ' +
                                 `<a href="/tasks/${taskID}/jobs/${jobID}" target="_blank">job ${taskID}</a>`,
                             reason: error.toString(),
+                            className: 'cvat-notification-notice-upload-annotations-fail',
                         },
                     },
                 },
@@ -1097,6 +1102,21 @@ export default function (state = defaultState, action: AnyAction): Notifications
                         ...state.errors.annotation,
                         jobFetching: {
                             message: 'Could not fetch frame data from the server',
+                            reason: action.payload.error,
+                        },
+                    },
+                },
+            };
+        }
+        case AnnotationActionTypes.GET_PREDICTIONS_FAILED: {
+            return {
+                ...state,
+                errors: {
+                    ...state.errors,
+                    predictor: {
+                        ...state.errors.predictor,
+                        prediction: {
+                            message: 'Could not fetch prediction data',
                             reason: action.payload.error,
                         },
                     },

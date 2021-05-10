@@ -10,7 +10,7 @@
     const {
         getFrame, getRanges, getPreview, clear: clearFrames, getContextImage,
     } = require('./frames');
-    const { ArgumentError } = require('./exceptions');
+    const { ArgumentError, DataError } = require('./exceptions');
     const { TaskStatus } = require('./enums');
     const { Label } = require('./labels');
     const User = require('./user');
@@ -258,6 +258,19 @@
                 },
                 writable: true,
             }),
+            predictor: Object.freeze({
+                value: {
+                    async status() {
+                        const result = await PluginRegistry.apiWrapper.call(this, prototype.predictor.status);
+                        return result;
+                    },
+                    async predict(frame) {
+                        const result = await PluginRegistry.apiWrapper.call(this, prototype.predictor.predict, frame);
+                        return result;
+                    },
+                },
+                writable: true,
+            }),
         });
     }
 
@@ -379,7 +392,7 @@
              * @param {integer} frame get objects from the frame
              * @param {boolean} allTracks show all tracks
              * even if they are outside and not keyframe
-             * @param {string[]} [filters = []]
+             * @param {any[]} [filters = []]
              * get only objects that satisfied to specific filters
              * @returns {module:API.cvat.classes.ObjectState[]}
              * @memberof Session.annotations
@@ -665,6 +678,40 @@
              * @instance
              * @async
              */
+            /**
+             * @typedef {Object} PredictorStatus
+             * @property {string} message - message for a user to be displayed somewhere
+             * @property {number} projectScore - model accuracy
+             * @global
+             */
+            /**
+             * Namespace is used for an interaction with events
+             * @namespace predictor
+             * @memberof Session
+             */
+            /**
+             * Subscribe to updates of a ML model binded to the project
+             * @method status
+             * @memberof Session.predictor
+             * @throws {module:API.cvat.exceptions.PluginError}
+             * @throws {module:API.cvat.exceptions.ServerError}
+             * @returns {PredictorStatus}
+             * @instance
+             * @async
+             */
+            /**
+             * Get predictions from a ML model binded to the project
+             * @method predict
+             * @memberof Session.predictor
+             * @param {number} frame - number of frame to inference
+             * @throws {module:API.cvat.exceptions.PluginError}
+             * @throws {module:API.cvat.exceptions.ArgumentError}
+             * @throws {module:API.cvat.exceptions.ServerError}
+             * @throws {module:API.cvat.exceptions.DataError}
+             * @returns {object[] | null} annotations
+             * @instance
+             * @async
+             */
         }
     }
 
@@ -864,6 +911,11 @@
 
             this.logger = {
                 log: Object.getPrototypeOf(this).logger.log.bind(this),
+            };
+
+            this.predictor = {
+                status: Object.getPrototypeOf(this).predictor.status.bind(this),
+                predict: Object.getPrototypeOf(this).predictor.predict.bind(this),
             };
         }
 
@@ -1304,7 +1356,7 @@
                      * @throws {module:API.cvat.exceptions.ArgumentError}
                      */
                     labels: {
-                        get: () => [...data.labels],
+                        get: () => data.labels.filter((_label) => !_label.deleted),
                         set: (labels) => {
                             if (!Array.isArray(labels)) {
                                 throw new ArgumentError('Value must be an array of Labels');
@@ -1318,8 +1370,14 @@
                                 }
                             }
 
+                            const IDs = labels.map((_label) => _label.id);
+                            const deletedLabels = data.labels.filter((_label) => !IDs.includes(_label.id));
+                            deletedLabels.forEach((_label) => {
+                                _label.deleted = true;
+                            });
+
                             updatedFields.labels = true;
-                            data.labels = [...labels];
+                            data.labels = [...deletedLabels, ...labels];
                         },
                     },
                     /**
@@ -1485,12 +1543,6 @@
                     dataChunkType: {
                         get: () => data.data_compressed_chunk_type,
                     },
-                    __updatedFields: {
-                        get: () => updatedFields,
-                        set: (fields) => {
-                            updatedFields = fields;
-                        },
-                    },
                     dimension: {
                         /**
                          * @name enabled
@@ -1500,6 +1552,15 @@
                          * @instance
                          */
                         get: () => data.dimension,
+                    },
+                    _internalData: {
+                        get: () => data,
+                    },
+                    __updatedFields: {
+                        get: () => updatedFields,
+                        set: (fields) => {
+                            updatedFields = fields;
+                        },
                     },
                 }),
             );
@@ -1544,6 +1605,11 @@
 
             this.logger = {
                 log: Object.getPrototypeOf(this).logger.log.bind(this),
+            };
+
+            this.predictor = {
+                status: Object.getPrototypeOf(this).predictor.status.bind(this),
+                predict: Object.getPrototypeOf(this).predictor.predict.bind(this),
             };
         }
 
@@ -1732,10 +1798,15 @@
         return rangesData;
     };
 
+    Job.prototype.frames.preview.implementation = async function () {
+        const frameData = await getPreview(this.task.id);
+        return frameData;
+    };
+
     // TODO: Check filter for annotations
     Job.prototype.annotations.get.implementation = async function (frame, allTracks, filters) {
-        if (!Array.isArray(filters) || filters.some((filter) => typeof filter !== 'string')) {
-            throw new ArgumentError('The filters argument must be an array of strings');
+        if (!Array.isArray(filters)) {
+            throw new ArgumentError('Filters must be an array');
         }
 
         if (!Number.isInteger(frame)) {
@@ -1751,8 +1822,8 @@
     };
 
     Job.prototype.annotations.search.implementation = function (filters, frameFrom, frameTo) {
-        if (!Array.isArray(filters) || filters.some((filter) => typeof filter !== 'string')) {
-            throw new ArgumentError('The filters argument must be an array of strings');
+        if (!Array.isArray(filters)) {
+            throw new ArgumentError('Filters must be an array');
         }
 
         if (!Number.isInteger(frameFrom) || !Number.isInteger(frameTo)) {
@@ -1888,6 +1959,16 @@
         return result;
     };
 
+    Job.prototype.predictor.status.implementation = async function () {
+        const result = await this.task.predictor.status();
+        return result;
+    };
+
+    Job.prototype.predictor.predict.implementation = async function (frame) {
+        const result = await this.task.predictor.predict(frame);
+        return result;
+    };
+
     Task.prototype.close.implementation = function closeTask() {
         clearFrames(this.id);
         for (const job of this.jobs) {
@@ -1920,7 +2001,7 @@
                         taskData.subset = this.subset;
                         break;
                     case 'labels':
-                        taskData.labels = [...this.labels.map((el) => el.toJSON())];
+                        taskData.labels = [...this._internalData.labels.map((el) => el.toJSON())];
                         break;
                     default:
                         break;
@@ -2017,11 +2098,6 @@
             step,
         );
         return result;
-    };
-
-    Job.prototype.frames.preview.implementation = async function () {
-        const frameData = await getPreview(this.task.id);
-        return frameData;
     };
 
     Task.prototype.frames.ranges.implementation = async function () {
@@ -2187,6 +2263,39 @@
 
     Task.prototype.logger.log.implementation = async function (logType, payload, wait) {
         const result = await loggerStorage.log(logType, { ...payload, task_id: this.id }, wait);
+        return result;
+    };
+
+    Task.prototype.predictor.status.implementation = async function () {
+        if (!Number.isInteger(this.projectId)) {
+            throw new DataError('The task must belong to a project to use the feature');
+        }
+
+        const result = await serverProxy.predictor.status(this.projectId);
+        return {
+            message: result.message,
+            progress: result.progress,
+            projectScore: result.score,
+            timeRemaining: result.time_remaining,
+            mediaAmount: result.media_amount,
+            annotationAmount: result.annotation_amount,
+        };
+    };
+
+    Task.prototype.predictor.predict.implementation = async function (frame) {
+        if (!Number.isInteger(frame) || frame < 0) {
+            throw new ArgumentError(`Frame must be a positive integer. Got: "${frame}"`);
+        }
+
+        if (frame >= this.size) {
+            throw new ArgumentError(`The frame with number ${frame} is out of the task`);
+        }
+
+        if (!Number.isInteger(this.projectId)) {
+            throw new DataError('The task must belong to a project to use the feature');
+        }
+
+        const result = await serverProxy.predictor.predict(this.id, frame);
         return result;
     };
 
